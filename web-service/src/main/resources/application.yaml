@@ -1,0 +1,19 @@
+spring:
+  application:
+    name: web-service
+
+  thymeleaf:
+    cache: false
+
+server:
+  port: 8082
+
+core:
+  service:
+    url: http://localhost:8081
+
+logging:
+  level:
+    com.masterly.web: DEBUG
+    org.springframework.web: DEBUG
+    org.springframework.web.servlet: DEBUG

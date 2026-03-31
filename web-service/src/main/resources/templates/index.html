@@ -1,0 +1,29 @@
+<div class="nav">
+    <!-- Админ видит всё -->
+    <div th:if="${#authorization.expression('hasRole(''ADMIN'')')}">
+        <a href="/clients">Клиенты</a>
+        <a href="/services">Услуги</a>
+        <a href="/materials">Материалы</a>
+        <a href="/appointments">Записи</a>
+        <a href="/profile">Профиль</a>
+        <a href="/masters">Мастера</a>
+    </div>
+
+    <!-- Мастер видит свои разделы -->
+    <div th:if="${#authorization.expression('hasRole(''MASTER'')')}">
+        <a href="/master/profile">Мой профиль</a>
+        <a href="/master/services">Мои услуги</a>
+        <a href="/master/materials">Мои материалы</a>
+        <a href="/master/clients">Мои клиенты</a>
+        <a href="/master/appointments">Мои записи</a>
+        <a href="/master/slots">Слоты времени</a>
+        <a href="/masters">Мастера</a>
+    </div>
+
+    <!-- Клиент видит мастеров и свои записи -->
+    <div th:if="${#authorization.expression('hasRole(''CLIENT'')')}">
+        <a href="/masters">Мастера</a>
+        <a href="/my-appointments">Мои записи</a>
+        <a href="/client/profile">Мой профиль</a>
+    </div>
+</div>

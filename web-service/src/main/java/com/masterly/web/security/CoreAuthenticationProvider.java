@@ -1,0 +1,65 @@
+package com.masterly.web.security;
+
+import com.masterly.web.client.CoreAuthClient;
+import com.masterly.web.dto.AuthResponse;
+import com.masterly.web.dto.LoginRequest;
+import com.masterly.web.service.TokenStorageService;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.authentication.AuthenticationProvider;
+import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.AuthenticationException;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.stereotype.Component;
+
+import java.util.Collections;
+
+@Slf4j
+@Component
+@RequiredArgsConstructor
+public class CoreAuthenticationProvider implements AuthenticationProvider {
+
+    private final CoreAuthClient coreAuthClient;
+    private final TokenStorageService tokenStorageService;
+
+    @Override
+    public Authentication authenticate(Authentication authentication) throws AuthenticationException {
+        String email = authentication.getName();
+        String password = authentication.getCredentials().toString();
+
+        log.info("Authentication attempt for user: {}", email);
+
+        try {
+            LoginRequest loginRequest = new LoginRequest();
+            loginRequest.setEmail(email);
+            loginRequest.setPassword(password);
+
+            AuthResponse response = coreAuthClient.login(loginRequest);
+
+            log.debug("Authentication successful for user: {}, role: {}", email, response.getRole());
+
+            // Сохраняем токен в сессию
+            tokenStorageService.saveToken(response.getToken());
+            log.debug("Token saved to session");
+
+            UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
+                    email,
+                    null,  // credentials не храним
+                    Collections.singletonList(new SimpleGrantedAuthority("ROLE_" + response.getRole()))
+            );
+
+            return authToken;
+
+        } catch (Exception e) {
+            log.warn("Authentication failed for user: {} - {}", email, e.getMessage());
+            throw new BadCredentialsException("Invalid email or password");
+        }
+    }
+
+    @Override
+    public boolean supports(Class<?> authentication) {
+        return UsernamePasswordAuthenticationToken.class.isAssignableFrom(authentication);
+    }
+}
