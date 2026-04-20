@@ -1,33 +1,24 @@
-spring:
-  application:
-    name: core-service
-
-  datasource:
-    url: jdbc:postgresql://localhost:5433/masterly_db
-    username: masterly_user
-    password: masterly_password
-    driver-class-name: org.postgresql.Driver
-
-  jpa:
-    hibernate:
-      ddl-auto: none
-    show-sql: false
-    properties:
-      hibernate:
-        dialect: org.hibernate.dialect.PostgreSQLDialect
-        format_sql: true
-
-  flyway:
-    enabled: false
-    baseline-on-migrate: true
-
 server:
   port: 8081
 
-jwt:
-  secret: ${JWT_SECRET:404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970}
-  expiration: ${JWT_EXPIRATION:86400000}
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/masterly_db
+    username: masterly_user
+    password: masterly_password
 
-logging:
-  level:
-    org.springframework.security: DEBUG
+  flyway:
+    enabled: true
+    locations:
+      - classpath:db/production-migration
+      - classpath:db/migration
+
+database:
+  admin:
+    url: jdbc:postgresql://localhost:5432/postgres
+    username: postgres
+    password: postgres
+
+jwt:
+  secret: your-secret-key-for-jwt-token-change-in-production
+  expiration: 86400000

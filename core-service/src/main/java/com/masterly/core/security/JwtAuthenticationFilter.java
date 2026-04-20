@@ -16,6 +16,13 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 
+/**
+ * Фильтр для JWT аутентификации.
+ * <p>
+ * Перехватывает каждый HTTP-запрос, извлекает JWT токен из заголовка Authorization,
+ * валидирует его и устанавливает аутентификацию в SecurityContext.
+ * </p>
+ */
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -24,6 +31,19 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private final JwtUtil jwtUtil;
     private final MasterDetailsService masterDetailsService;
 
+    /**
+     * Основной метод фильтрации запросов.
+     * <p>
+     * Проверяет наличие JWT токена в заголовке Authorization.
+     * Если токен валиден — устанавливает аутентификацию в SecurityContext.
+     * </p>
+     *
+     * @param request     HTTP запрос
+     * @param response    HTTP ответ
+     * @param filterChain цепочка фильтров
+     * @throws ServletException при ошибке сервлета
+     * @throws IOException      при ошибке ввода-вывода
+     */
     @Override
     protected void doFilterInternal(
             HttpServletRequest request,
@@ -34,6 +54,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         final String authHeader = request.getHeader("Authorization");
         final String jwt;
         final String userEmail;
+
+        log.debug("Request URI: {}, Auth header present: {}", request.getRequestURI(), authHeader != null);
 
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
             log.debug("No JWT token found in request: {}", request.getRequestURI());

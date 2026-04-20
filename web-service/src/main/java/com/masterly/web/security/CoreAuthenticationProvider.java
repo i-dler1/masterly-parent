@@ -16,6 +16,9 @@ import org.springframework.stereotype.Component;
 
 import java.util.Collections;
 
+/**
+ * Провайдер аутентификации через core-service.
+ */
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -24,6 +27,13 @@ public class CoreAuthenticationProvider implements AuthenticationProvider {
     private final CoreAuthClient coreAuthClient;
     private final TokenStorageService tokenStorageService;
 
+    /**
+     * Аутентифицирует пользователя через core-service.
+     *
+     * @param authentication данные для входа
+     * @return токен аутентификации
+     * @throws AuthenticationException при ошибке
+     */
     @Override
     public Authentication authenticate(Authentication authentication) throws AuthenticationException {
         String email = authentication.getName();
@@ -58,6 +68,12 @@ public class CoreAuthenticationProvider implements AuthenticationProvider {
         }
     }
 
+    /**
+     * Проверяет, поддерживается ли тип аутентификации.
+     *
+     * @param authentication тип аутентификации
+     * @return true если поддерживается
+     */
     @Override
     public boolean supports(Class<?> authentication) {
         return UsernamePasswordAuthenticationToken.class.isAssignableFrom(authentication);

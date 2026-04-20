@@ -2,8 +2,10 @@ package com.masterly.web.controller;
 
 import com.masterly.web.client.CoreServiceClient;
 import com.masterly.web.dto.AppointmentDto;
+import com.masterly.web.dto.MasterDto;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -16,6 +18,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * Контроллер календаря записей.
+ */
 @Slf4j
 @Controller
 @RequestMapping("/appointments/calendar")
@@ -24,15 +29,24 @@ public class CalendarController {
 
     private final CoreServiceClient coreServiceClient;
 
+    /**
+     * Отображение календаря записей.
+     *
+     * @param date текущая дата (опционально)
+     * @param view вид отображения (week/month)
+     * @param authentication данные аутентификации
+     * @param model модель для передачи данных в шаблон
+     * @return название шаблона
+     */
     @GetMapping
     public String showCalendar(
             @RequestParam(defaultValue = "#{T(java.time.LocalDate).now().toString()}") String date,
             @RequestParam(defaultValue = "week") String view,
+            Authentication authentication,
             Model model) {
 
         log.debug("Showing calendar - date: {}, view: {}", date, view);
 
-        // Маппинг месяцев для русского языка (именительный падеж)
         Map<Integer, String> monthNames = new HashMap<>();
         monthNames.put(1, "Январь");
         monthNames.put(2, "Февраль");
@@ -47,7 +61,7 @@ public class CalendarController {
         monthNames.put(11, "Ноябрь");
         monthNames.put(12, "Декабрь");
 
-        Long masterId = 1L;
+        Long masterId = getMasterId(authentication);
         LocalDate currentDate = LocalDate.parse(date);
         LocalDate today = LocalDate.now();
 
@@ -63,8 +77,7 @@ public class CalendarController {
             LocalDate firstDayOfMonth = currentDate.withDayOfMonth(1);
             LocalDate lastDayOfMonth = currentDate.withDayOfMonth(currentDate.lengthOfMonth());
 
-            // Находим первый понедельник месяца (для заполнения пустых ячеек)
-            int firstDayOfWeekValue = firstDayOfMonth.getDayOfWeek().getValue(); // 1=пн, 7=вс
+            int firstDayOfWeekValue = firstDayOfMonth.getDayOfWeek().getValue();
             int offset = firstDayOfWeekValue - 1;
 
             startDate = firstDayOfMonth.minusDays(offset);
@@ -96,7 +109,6 @@ public class CalendarController {
         model.addAttribute("view", view);
 
         if ("month".equals(view)) {
-            // Создаем список всех дней в отображаемом диапазоне
             List<LocalDate> daysInRange = new ArrayList<>();
             LocalDate day = startDate;
             while (!day.isAfter(endDate)) {
@@ -108,5 +120,16 @@ public class CalendarController {
         }
 
         return "appointments/calendar";
+    }
+
+    private Long getMasterId(Authentication authentication) {
+        String email = authentication.getName();
+        try {
+            MasterDto master = coreServiceClient.getMasterByEmail(email);
+            return master.getId();
+        } catch (Exception e) {
+            log.error("Error getting master ID: {}", e.getMessage());
+            throw new RuntimeException("Master not found");
+        }
     }
 }

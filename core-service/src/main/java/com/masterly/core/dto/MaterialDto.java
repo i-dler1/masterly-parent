@@ -4,10 +4,21 @@ import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
+
 import java.math.BigDecimal;
 
+/**
+ * DTO для передачи данных о расходном материале.
+ * Содержит информацию о количестве, единице измерения и цене.
+ */
 @Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
 public class MaterialDto {
     private Long id;
 
@@ -22,10 +33,10 @@ public class MaterialDto {
     private String unit;
 
     @NotNull(message = "Количество обязательно")
-    @DecimalMin(value = "0.0", inclusive = true, message = "Количество не может быть отрицательным")
+    @DecimalMin(value = "0.0", message = "Количество не может быть отрицательным")
     private BigDecimal quantity;
 
-    @DecimalMin(value = "0.0", inclusive = true, message = "Минимальное количество не может быть отрицательным")
+    @DecimalMin(value = "0.0", message = "Минимальное количество не может быть отрицательным")
     private BigDecimal minQuantity;
 
     @NotNull(message = "Цена обязательна")

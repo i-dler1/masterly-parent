@@ -10,6 +10,9 @@ import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
 
+/**
+ * Контроллер профиля пользователя.
+ */
 @Slf4j
 @Controller
 @RequestMapping("/profile")
@@ -18,52 +21,85 @@ public class ProfileController {
 
     private final CoreServiceClient coreServiceClient;
 
+    /**
+     * Просмотр профиля.
+     *
+     * @param authentication данные аутентификации
+     * @param model модель для передачи данных в шаблон
+     * @return название шаблона или "error" при ошибке
+     */
     @GetMapping
     public String showProfile(Authentication authentication, Model model) {
         String email = authentication.getName();
         log.debug("Showing profile for user: {}", email);
 
-        // Получаем мастера по email (нужно добавить метод в CoreServiceClient)
-        Long masterId = 1L; // временно, пока нет связи по email
+        boolean isAdmin = authentication.getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
 
-        MasterDto master = coreServiceClient.getMasterProfile(masterId);
-        log.debug("Loaded profile for master: {}", master.getEmail());
+        try {
+            MasterDto master = coreServiceClient.getMasterByEmail(email);
+            model.addAttribute("master", master);
 
-        model.addAttribute("master", master);
-
-        return "profile/index";
+            if (isAdmin) {
+                return "admin/profile";
+            } else {
+                return "masters/profile";
+            }
+        } catch (Exception e) {
+            log.error("Error loading profile: {}", e.getMessage());
+            return "error";
+        }
     }
 
+    /**
+     * Форма редактирования профиля.
+     *
+     * @param authentication данные аутентификации
+     * @param model модель для передачи данных в шаблон
+     * @return название шаблона или "error" при ошибке
+     */
     @GetMapping("/edit")
     public String showEditForm(Authentication authentication, Model model) {
         String email = authentication.getName();
         log.debug("Showing edit form for user: {}", email);
 
-        Long masterId = 1L;
-        MasterDto master = coreServiceClient.getMasterProfile(masterId);
+        try {
+            MasterDto master = coreServiceClient.getMasterByEmail(email);
 
-        MasterUpdateDto updateDto = new MasterUpdateDto();
-        updateDto.setFullName(master.getFullName());
-        updateDto.setPhone(master.getPhone());
-        updateDto.setBusinessName(master.getBusinessName());
-        updateDto.setSpecialization(master.getSpecialization());
+            MasterUpdateDto updateDto = new MasterUpdateDto();
+            updateDto.setFullName(master.getFullName());
+            updateDto.setPhone(master.getPhone());
+            updateDto.setBusinessName(master.getBusinessName());
+            updateDto.setSpecialization(master.getSpecialization());
 
-        model.addAttribute("master", updateDto);
-
-        return "profile/edit";
+            model.addAttribute("master", updateDto);
+            return "profile/edit";
+        } catch (Exception e) {
+            log.error("Error loading edit form: {}", e.getMessage());
+            return "error";
+        }
     }
 
+    /**
+     * Обновление профиля.
+     *
+     * @param updateDto данные для обновления
+     * @param authentication данные аутентификации
+     * @return редирект на профиль
+     */
     @PostMapping("/update")
-    public String updateProfile(@ModelAttribute MasterUpdateDto updateDto) {
-        log.info("Updating master profile");
-        log.debug("Updated details - name: {}, phone: {}, business: {}, specialization: {}",
-                updateDto.getFullName(), updateDto.getPhone(),
-                updateDto.getBusinessName(), updateDto.getSpecialization());
+    public String updateProfile(@ModelAttribute MasterUpdateDto updateDto, Authentication authentication) {
+        String email = authentication.getName();
+        log.info("Updating profile for user: {}", email);
 
-        Long masterId = 1L;
-        coreServiceClient.updateMasterProfile(masterId, updateDto);
-
-        log.info("Master profile updated successfully");
-        return "redirect:/profile";
+        try {
+            MasterDto master = coreServiceClient.getMasterByEmail(email);
+            coreServiceClient.updateMasterProfile(master.getId(), updateDto);
+            log.info("Profile updated successfully");
+            return "redirect:/profile";
+        } catch (Exception e) {
+            log.error("Error updating profile: {}", e.getMessage());
+            return "redirect:/profile?error";
+        }
     }
 }

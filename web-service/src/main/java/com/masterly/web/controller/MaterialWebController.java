@@ -1,14 +1,19 @@
 package com.masterly.web.controller;
 
 import com.masterly.web.client.CoreServiceClient;
+import com.masterly.web.dto.MasterDto;
 import com.masterly.web.dto.MaterialDto;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
+import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
 
+/**
+ * Контроллер управления материалами.
+ */
 @Slf4j
 @Controller
 @RequestMapping("/materials")
@@ -17,21 +22,55 @@ public class MaterialWebController {
 
     private final CoreServiceClient coreServiceClient;
 
+    private Long getMasterId(Authentication authentication) {
+        String email = authentication.getName();
+        log.debug("Getting master ID for email: {}", email);
+
+        try {
+            MasterDto master = coreServiceClient.getMasterByEmail(email);
+            return master.getId();
+        } catch (Exception e) {
+            log.error("Error getting master ID: {}", e.getMessage());
+            return 1L;
+        }
+    }
+
+    /**
+     * Список материалов.
+     *
+     * @param page номер страницы
+     * @param size размер страницы
+     * @param sortBy поле для сортировки
+     * @param sortDir направление сортировки
+     * @param authentication данные аутентификации
+     * @param model модель для передачи данных в шаблон
+     * @return название шаблона
+     */
     @GetMapping
     public String listMaterials(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(defaultValue = "id") String sortBy,
             @RequestParam(defaultValue = "asc") String sortDir,
+            Authentication authentication,
             Model model) {
 
         log.debug("Listing materials - page: {}, size: {}, sortBy: {}, sortDir: {}",
                 page, size, sortBy, sortDir);
 
-        Long masterId = 1L;
+        boolean isAdmin = authentication.getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
 
-        Page<MaterialDto> materialPage = coreServiceClient.getMaterialsPaginated(
-                page, size, sortBy, sortDir, masterId);
+        Page<MaterialDto> materialPage;
+
+        if (isAdmin) {
+            log.info("Admin viewing all materials");
+            materialPage = coreServiceClient.getAllMaterialsForAdmin(page, size, sortBy, sortDir);
+        } else {
+            Long masterId = getMasterId(authentication);
+            log.debug("Master {} viewing materials", masterId);
+            materialPage = coreServiceClient.getMaterialsPaginated(page, size, sortBy, sortDir, masterId);
+        }
 
         log.debug("Found {} materials total", materialPage.getTotalElements());
 
@@ -47,6 +86,12 @@ public class MaterialWebController {
         return "materials/list";
     }
 
+    /**
+     * Форма создания материала.
+     *
+     * @param model модель для передачи данных в шаблон
+     * @return название шаблона
+     */
     @GetMapping("/new")
     public String showCreateForm(Model model) {
         log.debug("Showing create material form");
@@ -54,11 +99,19 @@ public class MaterialWebController {
         return "materials/form";
     }
 
+    /**
+     * Форма редактирования материала.
+     *
+     * @param id идентификатор материала
+     * @param authentication данные аутентификации
+     * @param model модель для передачи данных в шаблон
+     * @return название шаблона
+     */
     @GetMapping("/edit/{id}")
-    public String showEditForm(@PathVariable Long id, Model model) {
+    public String showEditForm(@PathVariable Long id, Authentication authentication, Model model) {
         log.debug("Showing edit form for material: {}", id);
 
-        Long masterId = 1L;
+        Long masterId = getMasterId(authentication);
         MaterialDto material = coreServiceClient.getMaterial(id, masterId);
 
         log.debug("Loaded material: {}", material.getName());
@@ -66,9 +119,16 @@ public class MaterialWebController {
         return "materials/form";
     }
 
+    /**
+     * Сохранение материала.
+     *
+     * @param materialDto данные материала
+     * @param authentication данные аутентификации
+     * @return редирект на список материалов
+     */
     @PostMapping("/save")
-    public String saveMaterial(@ModelAttribute MaterialDto materialDto) {
-        Long masterId = 1L;
+    public String saveMaterial(@ModelAttribute MaterialDto materialDto, Authentication authentication) {
+        Long masterId = getMasterId(authentication);
 
         if (materialDto.getId() == null) {
             log.info("Creating new material: {}", materialDto.getName());
@@ -83,13 +143,26 @@ public class MaterialWebController {
         return "redirect:/materials";
     }
 
+    /**
+     * Удаление материала.
+     *
+     * @param id идентификатор материала
+     * @param authentication данные аутентификации
+     * @return редирект на список материалов
+     */
     @GetMapping("/delete/{id}")
-    public String deleteMaterial(@PathVariable Long id) {
+    public String deleteMaterial(@PathVariable Long id, Authentication authentication) {
         log.info("Deleting material: {}", id);
 
-        coreServiceClient.deleteMaterial(id);
+        Long masterId = getMasterId(authentication);
 
-        log.debug("Material {} deleted successfully", id);
-        return "redirect:/materials";
+        try {
+            coreServiceClient.deleteMaterial(id);
+            log.debug("Material {} deleted successfully", id);
+            return "redirect:/materials";
+        } catch (Exception e) {
+            log.error("Error deleting material: {}", e.getMessage());
+            return "redirect:/materials?error";
+        }
     }
 }

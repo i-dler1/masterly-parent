@@ -1,30 +1,46 @@
 package com.masterly.core.mapper;
 
 import com.masterly.core.dto.ClientDto;
-import com.masterly.core.model.Client;
-import com.masterly.core.model.Master;
-import org.springframework.stereotype.Component;
+import com.masterly.core.entity.Client;
+import com.masterly.core.entity.Master;
+import org.mapstruct.Mapper;
+import org.mapstruct.Mapping;
+import org.mapstruct.ReportingPolicy;
 
-@Component
-public class ClientMapper {
+/**
+ * Маппер для преобразования между сущностью {@link Client} и DTO {@link ClientDto}.
+ * Использует MapStruct для автоматической генерации реализации.
+ */
+@Mapper(componentModel = "spring", unmappedTargetPolicy = ReportingPolicy.IGNORE)
+public interface ClientMapper {
 
-    public ClientDto toDto(Client client) {
-        ClientDto dto = new ClientDto();
+    /**
+     * Преобразовать сущность {@link Client} в {@link ClientDto}.
+     *
+     * @param client сущность клиента
+     * @return DTO с данными клиента
+     */
+    ClientDto toDto(Client client);
 
-        dto.setId(client.getId());
-        dto.setFullName(client.getFullName());
-        dto.setPhone(client.getPhone());
-        dto.setEmail(client.getEmail());
-
-        return dto;
-    }
-
-    public Client toEntity(ClientDto dto, Master master) {
-        Client client = new Client();
-        client.setMaster(master);
-        client.setFullName(dto.getFullName());
-        client.setPhone(dto.getPhone());
-        client.setEmail(dto.getEmail());
-        return client;
-    }
+    /**
+     * Преобразовать {@link Client} в сущность {@link ClientDto}.
+     *
+     * @param dto DTO с данными для создания клиента
+     * @param master мастер
+     * @return сущность клиента
+     */
+    @Mapping(target = "id", ignore = true)
+    @Mapping(target = "fullName", source = "dto.fullName")
+    @Mapping(target = "phone", source = "dto.phone")
+    @Mapping(target = "email", source = "dto.email")
+    @Mapping(target = "instagram", source = "dto.instagram")
+    @Mapping(target = "telegram", source = "dto.telegram")
+    @Mapping(target = "notes", source = "dto.notes")
+    @Mapping(target = "isRegular", source = "dto.isRegular")
+    @Mapping(target = "birthDate", ignore = true)
+    @Mapping(target = "createdBy", ignore = true)
+    @Mapping(target = "master", source = "master")
+    @Mapping(target = "createdAt", ignore = true)
+    @Mapping(target = "updatedAt", ignore = true)
+    Client toEntity(ClientDto dto, Master master);
 }

@@ -1,13 +1,11 @@
 package com.masterly.web.controller;
 
 import com.masterly.web.client.CoreServiceClient;
-import com.masterly.web.dto.AppointmentCreateDto;
-import com.masterly.web.dto.AppointmentDto;
-import com.masterly.web.dto.ClientDto;
-import com.masterly.web.dto.ServiceDto;
+import com.masterly.web.dto.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
+import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
@@ -15,6 +13,9 @@ import org.springframework.web.bind.annotation.*;
 import java.time.LocalDate;
 import java.util.List;
 
+/**
+ * Контроллер управления записями для мастера.
+ */
 @Slf4j
 @Controller
 @RequestMapping("/appointments")
@@ -23,21 +24,59 @@ public class AppointmentWebController {
 
     private final CoreServiceClient coreServiceClient;
 
+    private Long getMasterId(Authentication authentication) {
+        if (authentication == null) {
+            throw new RuntimeException("Authentication required");
+        }
+
+        String email = authentication.getName();
+        log.debug("Getting master ID for email: {}", email);
+
+        try {
+            MasterDto master = coreServiceClient.getMasterByEmail(email);
+            return master.getId();
+        } catch (Exception e) {
+            log.error("Error getting master ID: {}", e.getMessage());
+            throw new RuntimeException("Master not found for email: " + email);
+        }
+    }
+
+    /**
+     * Список записей мастера.
+     *
+     * @param page номер страницы
+     * @param size размер страницы
+     * @param sortBy поле для сортировки
+     * @param sortDir направление сортировки
+     * @param authentication данные аутентификации
+     * @param model модель для передачи данных в шаблон
+     * @return название шаблона
+     */
     @GetMapping
     public String listAppointments(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(defaultValue = "id") String sortBy,
             @RequestParam(defaultValue = "asc") String sortDir,
+            Authentication authentication,
             Model model) {
 
         log.debug("Listing appointments - page: {}, size: {}, sortBy: {}, sortDir: {}",
                 page, size, sortBy, sortDir);
 
-        Long masterId = 1L;
+        boolean isAdmin = authentication.getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
 
-        Page<AppointmentDto> appointmentPage = coreServiceClient.getAppointmentsPaginated(
-                page, size, sortBy, sortDir, masterId);
+        Page<AppointmentDto> appointmentPage;
+
+        if (isAdmin) {
+            log.info("Admin viewing all appointments");
+            appointmentPage = coreServiceClient.getAllAppointmentsForAdmin(page, size, sortBy, sortDir);
+        } else {
+            Long masterId = getMasterId(authentication);
+            log.debug("Master {} viewing appointments", masterId);
+            appointmentPage = coreServiceClient.getAppointmentsPaginated(page, size, sortBy, sortDir, masterId);
+        }
 
         log.debug("Found {} appointments total", appointmentPage.getTotalElements());
 
@@ -53,25 +92,13 @@ public class AppointmentWebController {
         return "appointments/list";
     }
 
-//    @GetMapping("/new")
-//    public String showCreateForm(Model model) {
-//        log.debug("Showing create appointment form");
-//
-//        Long masterId = 1L;
-//
-//        List<ClientDto> clients = coreServiceClient.getAllClients(masterId);
-//        List<ServiceDto> services = coreServiceClient.getAllServices(masterId);
-//
-//        log.debug("Loaded {} clients and {} services for form", clients.size(), services.size());
-//
-//        model.addAttribute("appointment", new AppointmentCreateDto());
-//        model.addAttribute("clients", clients);
-//        model.addAttribute("services", services);
-//        model.addAttribute("today", LocalDate.now());
-//
-//        return "appointments/form";
-//    }
-
+    /**
+     * Сохранение записи.
+     *
+     * @param createDto данные для создания записи
+     * @param id идентификатор записи (опционально, для обновления)
+     * @return редирект на список записей
+     */
     @PostMapping("/save")
     public String saveAppointment(@ModelAttribute AppointmentCreateDto createDto,
                                   @RequestParam(required = false) Long id) {
@@ -97,6 +124,12 @@ public class AppointmentWebController {
         return "redirect:/appointments";
     }
 
+    /**
+     * Удаление записи.
+     *
+     * @param id идентификатор записи
+     * @return редирект на список записей
+     */
     @GetMapping("/delete/{id}")
     public String deleteAppointment(@PathVariable Long id) {
         log.info("Deleting appointment: {}", id);
@@ -107,6 +140,13 @@ public class AppointmentWebController {
         return "redirect:/appointments";
     }
 
+    /**
+     * Обновление статуса записи.
+     *
+     * @param id идентификатор записи
+     * @param status новый статус
+     * @return редирект на список записей
+     */
     @GetMapping("/status/{id}")
     public String updateStatus(@PathVariable Long id, @RequestParam String status) {
         log.info("Updating appointment {} status to: {}", id, status);
@@ -117,30 +157,35 @@ public class AppointmentWebController {
         return "redirect:/appointments";
     }
 
+    /**
+     * Форма редактирования записи.
+     *
+     * @param id идентификатор записи
+     * @param model модель для передачи данных в шаблон
+     * @return название шаблона
+     */
     @GetMapping("/edit/{id}")
     public String showEditForm(@PathVariable Long id, Model model) {
         log.debug("Showing edit form for appointment: {}", id);
 
         Long masterId = 1L;
 
-        // Получаем запись для редактирования
         AppointmentDto appointment = coreServiceClient.getAppointment(id);
         log.debug("Loaded appointment: client={}, service={}, date={}, time={}",
                 appointment.getClientId(), appointment.getServiceId(),
                 appointment.getAppointmentDate(), appointment.getStartTime());
 
-        // Загружаем клиентов и услуги для выпадающих списков
         List<ClientDto> clients = coreServiceClient.getAllClients(masterId);
-        List<ServiceDto> services = coreServiceClient.getAllServices(masterId);
+        List<ServiceEntityDto> services = coreServiceClient.getAllServices(masterId);
         log.debug("Loaded {} clients and {} services for edit form", clients.size(), services.size());
 
-        // Создаем DTO для формы из существующей записи
-        AppointmentCreateDto createDto = new AppointmentCreateDto();
-        createDto.setClientId(appointment.getClientId());
-        createDto.setServiceId(appointment.getServiceId());
-        createDto.setAppointmentDate(appointment.getAppointmentDate());
-        createDto.setStartTime(appointment.getStartTime());
-        createDto.setNotes(appointment.getNotes());
+        AppointmentCreateDto createDto = AppointmentCreateDto.builder()
+                .clientId(appointment.getClientId())
+                .serviceId(appointment.getServiceId())
+                .appointmentDate(appointment.getAppointmentDate())
+                .startTime(appointment.getStartTime())
+                .notes(appointment.getNotes())
+                .build();
 
         model.addAttribute("appointment", createDto);
         model.addAttribute("appointmentId", id);

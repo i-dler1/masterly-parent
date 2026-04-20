@@ -2,7 +2,7 @@ package com.masterly.web.controller;
 
 import com.masterly.web.client.CoreServiceClient;
 import com.masterly.web.dto.MasterDto;
-import com.masterly.web.dto.ServiceDto;
+import com.masterly.web.dto.ServiceEntityDto;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Controller;
@@ -13,6 +13,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 
 import java.util.List;
 
+/**
+ * Контроллер публичного просмотра мастеров.
+ */
 @Slf4j
 @Controller
 @RequestMapping("/masters")
@@ -21,6 +24,12 @@ public class MasterListController {
 
     private final CoreServiceClient coreServiceClient;
 
+    /**
+     * Список всех мастеров.
+     *
+     * @param model модель для передачи данных в шаблон
+     * @return название шаблона
+     */
     @GetMapping
     public String listMasters(Model model) {
         log.info("Listing all masters");
@@ -29,14 +38,20 @@ public class MasterListController {
         return "masters/list";
     }
 
+    /**
+     * Профиль мастера с услугами.
+     *
+     * @param id идентификатор мастера
+     * @param model модель для передачи данных в шаблон
+     * @return название шаблона
+     */
     @GetMapping("/{id}")
     public String masterProfile(@PathVariable Long id, Model model) {
         log.info("Viewing master profile: {}", id);
         MasterDto master = coreServiceClient.getMasterById(id);
         model.addAttribute("master", master);
 
-        // Получаем услуги мастера
-        List<ServiceDto> services = coreServiceClient.getServicesByMasterId(id);
+        List<ServiceEntityDto> services = coreServiceClient.getServicesByMasterId(id);
         model.addAttribute("services", services);
 
         return "masters/profile";

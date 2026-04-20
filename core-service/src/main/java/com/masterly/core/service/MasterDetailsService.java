@@ -8,6 +8,10 @@ import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 
+/**
+ * Сервис для загрузки данных пользователя при аутентификации.
+ * Реализует {@link UserDetailsService} для интеграции со Spring Security.
+ */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -15,6 +19,13 @@ public class MasterDetailsService implements UserDetailsService {
 
     private final MasterRepository masterRepository;
 
+    /**
+     * Загрузить пользователя по email для аутентификации.
+     *
+     * @param email email пользователя
+     * @return UserDetails с данными пользователя
+     * @throws UsernameNotFoundException если пользователь не найден
+     */
     @Override
     public UserDetails loadUserByUsername(String email) throws UsernameNotFoundException {
         log.debug("Loading user by email: {}", email);

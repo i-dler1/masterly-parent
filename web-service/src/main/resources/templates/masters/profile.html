@@ -17,20 +17,19 @@
 </head>
 <body>
 <div class="header">
-    <h1>Masterly</h1>
+    <h1>Masterly - Кабинет мастера</h1>
     <form th:action="@{/logout}" method="post" class="logout-form">
         <button type="submit">Выйти</button>
     </form>
 </div>
 
 <div class="nav">
-    <a href="/master/profile">Профиль</a>
+    <a href="/">Главная</a>
+    <a href="/master/clients">Клиенты</a>
     <a href="/master/services">Услуги</a>
     <a href="/master/materials">Материалы</a>
-    <a href="/master/clients">Клиенты</a>
     <a href="/master/appointments">Записи</a>
-    <a href="/master/slots">Слоты времени</a>
-    <a href="/">Главная</a>
+    <a href="/master/profile">Профиль</a>
 </div>
 
 <div class="content">
@@ -41,6 +40,10 @@
         <p><strong>Телефон:</strong> <span th:text="${master.phone != null ? master.phone : 'Не указан'}"></span></p>
         <p><strong>Специализация:</strong> <span th:text="${master.specialization != null ? master.specialization : 'Не указана'}"></span></p>
         <p><strong>Название салона:</strong> <span th:text="${master.businessName != null ? master.businessName : 'Не указано'}"></span></p>
+    </div>
+
+    <div class="mt-3">
+        <a href="/master/profile/edit" class="btn btn-primary">Редактировать профиль</a>
     </div>
 </div>
 </body>

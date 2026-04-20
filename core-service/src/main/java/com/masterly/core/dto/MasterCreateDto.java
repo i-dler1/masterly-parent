@@ -1,16 +1,28 @@
 package com.masterly.core.dto;
 
+import com.masterly.core.validation.UniqueEmail;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
+/**
+ * DTO для регистрации нового мастера.
+ * Содержит обязательные поля: email, пароль, имя и телефон.
+ */
 @Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
 public class MasterCreateDto {
 
     @NotBlank(message = "Email обязателен")
     @Email(message = "Email должен быть корректным")
+    @UniqueEmail
     private String email;
 
     @NotBlank(message = "Пароль обязателен")
@@ -24,4 +36,6 @@ public class MasterCreateDto {
     @NotBlank(message = "Номер телефона обязательно")
     @Pattern(regexp = "^\\+375\\d{9}$", message = "Телефон должен быть в формате +375XXXXXXXXX")
     private String phone;
+
+    private String role;
 }

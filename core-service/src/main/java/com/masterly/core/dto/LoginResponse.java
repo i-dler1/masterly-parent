@@ -1,10 +1,17 @@
 package com.masterly.core.dto;
 
-import com.masterly.core.model.Role;
 import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
+/**
+ * DTO для ответа при успешной аутентификации.
+ * Содержит JWT токен и базовую информацию о пользователе.
+ */
 @Data
+@Builder
+@NoArgsConstructor
 @AllArgsConstructor
 public class LoginResponse {
     private String token;
@@ -13,13 +20,4 @@ public class LoginResponse {
     private String email;
     private String name;
     private String role;
-
-    public LoginResponse(String token, Long id, String email, String name, String role) {
-        this.token = token;
-        this.type = "Bearer";
-        this.id = id;
-        this.email = email;
-        this.name = name;
-        this.role = role;
-    }
 }

@@ -3,8 +3,9 @@ package com.masterly.core.service;
 import com.masterly.core.dto.AppointmentCreateDto;
 import com.masterly.core.dto.AppointmentDto;
 import com.masterly.core.mapper.AppointmentMapper;
-import com.masterly.core.model.*;
+import com.masterly.core.entity.*;
 import com.masterly.core.repository.*;
+import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -13,10 +14,16 @@ import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.List;
 import java.util.stream.Collectors;
 
+/**
+ * Сервис для управления записями.
+ * Предоставляет бизнес-логику для создания, обновления, удаления записей,
+ * а также управления статусами и списания/возврата материалов.
+ */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -28,17 +35,39 @@ public class AppointmentService {
     private final AppointmentMapper appointmentMapper;
     private final ClientRepository clientRepository;
     private final ServiceEntityRepository serviceEntityRepository;
+    private final AvailabilitySlotRepository availabilitySlotRepository;
+    private final MasterRepository masterRepository;
 
+    /**
+     * Получить все записи мастера.
+     *
+     * @param masterId ID мастера
+     * @return список всех записей мастера
+     */
     public List<Appointment> getAllAppointments(Long masterId) {
         log.debug("Fetching all appointments for master: {}", masterId);
         return appointmentRepository.findByMasterId(masterId);
     }
 
+    /**
+     * Получить запись по ID.
+     *
+     * @param id ID записи
+     * @return запись или null если не найдена
+     */
     public Appointment getAppointment(Long id) {
         log.debug("Fetching appointment by id: {}", id);
         return appointmentRepository.findById(id).orElse(null);
     }
 
+    /**
+     * Создать новую запись с проверкой доступности слота и наличия материалов.
+     *
+     * @param appointment запись для создания
+     * @return созданная запись
+     * @throws RuntimeException если слот занят или недостаточно материалов
+     */
+    @Transactional
     public Appointment createAppointment(Appointment appointment) {
         log.info("Creating appointment - master: {}, client: {}, service: {}, date: {}, time: {}",
                 appointment.getMaster().getId(),
@@ -47,44 +76,127 @@ public class AppointmentService {
                 appointment.getAppointmentDate(),
                 appointment.getStartTime());
 
+        addClientToMasterIfNotExists(appointment.getMaster(), appointment.getClient());
+
         // Расчет времени окончания
         LocalTime endTime = appointment.getStartTime()
                 .plusMinutes(appointment.getService().getDurationMinutes());
         appointment.setEndTime(endTime);
         log.debug("Calculated end time: {}", endTime);
 
-        // Проверка конфликта времени
-        boolean isOccupied = isTimeSlotOccupied(
+        // Ищем слот
+        List<AvailabilitySlot> slots = availabilitySlotRepository.findByMasterIdAndSlotDateAndStartTime(
                 appointment.getMaster().getId(),
                 appointment.getAppointmentDate(),
-                appointment.getStartTime(),
-                endTime
+                appointment.getStartTime()
         );
 
-        if (isOccupied) {
-            log.warn("Time slot is occupied - master: {}, date: {}, time: {}",
+        log.info("Found {} slots for master={}, date={}, time={}",
+                slots.size(), appointment.getMaster().getId(),
+                appointment.getAppointmentDate(), appointment.getStartTime());
+
+        if (!slots.isEmpty()) {
+            AvailabilitySlot slot = slots.get(0);
+            log.info("Slot found: id={}, isBooked={}", slot.getId(), slot.getIsBooked());
+            if (slot.getIsBooked()) {
+                log.warn("Slot is already booked - master: {}, date: {}, time: {}",
+                        appointment.getMaster().getId(),
+                        appointment.getAppointmentDate(),
+                        appointment.getStartTime());
+                throw new RuntimeException("This time slot is already occupied");
+            }
+            slot.setIsBooked(true);
+            availabilitySlotRepository.save(slot);
+            log.info("Slot {} booked successfully", slot.getId());
+        } else {
+            log.warn("No slot found for master={}, date={}, time={}",
                     appointment.getMaster().getId(),
                     appointment.getAppointmentDate(),
                     appointment.getStartTime());
-            throw new RuntimeException("This time slot is already occupied");
+            boolean isOccupied = isTimeSlotOccupied(
+                    appointment.getMaster().getId(),
+                    appointment.getAppointmentDate(),
+                    appointment.getStartTime(),
+                    endTime
+            );
+
+            if (isOccupied) {
+                throw new RuntimeException("This time slot is already occupied");
+            }
         }
-        log.debug("Time slot is free");
 
         // Проверка наличия материалов
-        log.debug("Checking materials for service: {}", appointment.getService().getId());
         if (!hasEnoughMaterials(appointment.getService())) {
-            log.warn("Not enough materials for service: {}", appointment.getService().getId());
             throw new RuntimeException("Not enough materials for this service");
         }
-        log.debug("Materials check passed");
 
         appointment.setStatus(AppointmentStatus.PENDING);
         Appointment saved = appointmentRepository.save(appointment);
         log.info("Appointment created successfully with id: {}", saved.getId());
 
+        writeOffMaterials(saved);
+
         return saved;
     }
 
+    private void addClientToMasterIfNotExists(Master master, Client client) {
+        // Проверяем, есть ли уже этот клиент у мастера
+        boolean exists = clientRepository.existsByMasterAndId(master, client.getId());
+
+        if (!exists) {
+            log.info("Adding client {} to master {} clients list", client.getFullName(), master.getFullName());
+
+            // Создаем связь клиента с мастером
+            client.setMaster(master);
+            client.setCreatedBy(master);
+            clientRepository.save(client);
+
+            log.info("Client {} added to master {} successfully", client.getFullName(), master.getFullName());
+        } else {
+            log.debug("Client {} already exists in master {} clients list", client.getFullName(), master.getFullName());
+        }
+    }
+
+    /**
+     * Создать новую запись на основе DTO.
+     * Выполняет проверку доступности слота, наличия материалов и сохраняет запись.
+     *
+     * @param createDto DTO с данными для создания записи
+     * @return DTO созданной записи
+     * @throws RuntimeException если слот занят, недостаточно материалов или сущности не найдены
+     */
+    @Transactional
+    public AppointmentDto createAppointment(AppointmentCreateDto createDto) {
+        log.info("Creating appointment from DTO - masterId: {}, clientId: {}, serviceId: {}, date: {}, time: {}",
+                createDto.getMasterId(), createDto.getClientId(), createDto.getServiceId(),
+                createDto.getAppointmentDate(), createDto.getStartTime());
+
+        // 1. Поиск связанных сущностей
+        Master master = masterRepository.findById(createDto.getMasterId())
+                .orElseThrow(() -> new RuntimeException("Master not found with id: " + createDto.getMasterId()));
+        Client client = clientRepository.findById(createDto.getClientId())
+                .orElseThrow(() -> new RuntimeException("Client not found with id: " + createDto.getClientId()));
+        ServiceEntity service = serviceEntityRepository.findById(createDto.getServiceId())
+                .orElseThrow(() -> new RuntimeException("Service not found with id: " + createDto.getServiceId()));
+
+        // 2. Маппинг DTO в сущность
+        Appointment appointment = appointmentMapper.toEntity(createDto, master, client, service);
+
+        // 3. Вызов существующего метода создания (он уже содержит всю бизнес-логику)
+        Appointment saved = createAppointment(appointment);
+
+        // 4. Преобразование результата в DTO
+        return appointmentMapper.toDto(saved);
+    }
+
+    /**
+     * Обновить статус записи. При завершении списывает материалы, при отмене — возвращает.
+     *
+     * @param id     ID записи
+     * @param status новый статус
+     * @return обновлённая запись или null если не найдена
+     */
+    @Transactional
     public Appointment updateAppointmentStatus(Long id, AppointmentStatus status) {
         log.info("Updating appointment {} status to: {}", id, status);
 
@@ -105,17 +217,43 @@ public class AppointmentService {
             writeOffMaterials(appointment);
         }
 
+        if (status == AppointmentStatus.CANCELLED && oldStatus != AppointmentStatus.COMPLETED) {
+            log.info("Returning materials for cancelled appointment: {}", id);
+            returnMaterials(appointment);
+        }
+
         Appointment updated = appointmentRepository.save(appointment);
         log.info("Appointment {} status updated successfully", id);
         return updated;
     }
 
+    /**
+     * Удалить запись. Если запись не завершена — возвращает материалы.
+     *
+     * @param id ID записи
+     */
     public void deleteAppointment(Long id) {
         log.info("Deleting appointment: {}", id);
+
+        Appointment appointment = getAppointment(id);
+        if (appointment != null && appointment.getStatus() != AppointmentStatus.COMPLETED) {
+            // Возвращаем материалы, если запись не была выполнена
+            returnMaterials(appointment);
+        }
+
         appointmentRepository.deleteById(id);
         log.debug("Appointment {} deleted", id);
     }
 
+    /**
+     * Проверить, занят ли временной слот.
+     *
+     * @param masterId  ID мастера
+     * @param date      дата
+     * @param startTime время начала
+     * @param endTime   время окончания
+     * @return true если слот занят, false если свободен
+     */
     public boolean isTimeSlotOccupied(Long masterId, LocalDate date, LocalTime startTime, LocalTime endTime) {
         log.debug("Checking time slot - master: {}, date: {}, start: {}, end: {}",
                 masterId, date, startTime, endTime);
@@ -138,6 +276,12 @@ public class AppointmentService {
         return occupied;
     }
 
+    /**
+     * Проверить, достаточно ли материалов для услуги.
+     *
+     * @param service услуга
+     * @return true если материалов достаточно, false если нет
+     */
     public boolean hasEnoughMaterials(ServiceEntity service) {
         log.debug("Checking materials for service: {}", service.getId());
 
@@ -166,6 +310,11 @@ public class AppointmentService {
         return true;
     }
 
+    /**
+     * Списать материалы для выполненной записи.
+     *
+     * @param appointment запись
+     */
     public void writeOffMaterials(Appointment appointment) {
         log.info("Writing off materials for appointment: {}", appointment.getId());
 
@@ -182,6 +331,13 @@ public class AppointmentService {
         }
     }
 
+    /**
+     * Получить записи мастера с пагинацией.
+     *
+     * @param masterId ID мастера
+     * @param pageable параметры пагинации
+     * @return страница с записями
+     */
     public Page<AppointmentDto> getAppointmentsByMasterId(Long masterId, Pageable pageable) {
         log.debug("Fetching appointments for master: {}, page: {}, size: {}",
                 masterId, pageable.getPageNumber(), pageable.getPageSize());
@@ -192,6 +348,14 @@ public class AppointmentService {
         return appointments.map(appointmentMapper::toDto);
     }
 
+    /**
+     * Обновить запись.
+     *
+     * @param id        ID записи
+     * @param createDto DTO с новыми данными
+     * @return обновлённая запись
+     * @throws RuntimeException если запись не найдена или слот занят
+     */
     public Appointment updateAppointment(Long id, AppointmentCreateDto createDto) {
         log.info("Updating appointment: {}", id);
 
@@ -244,10 +408,71 @@ public class AppointmentService {
         return updated;
     }
 
+    /**
+     * Получить все записи для администратора с пагинацией.
+     *
+     * @param pageable параметры пагинации
+     * @return страница со всеми записями
+     */
+    public Page<AppointmentDto> getAppointmentsForAdmin(Pageable pageable) {
+        log.debug("Fetching all appointments for admin");
+        Page<Appointment> appointments = appointmentRepository.findAll(pageable);
+        return appointments.map(appointmentMapper::toDto);
+    }
+
+    /**
+     * Получить записи клиента по ID.
+     *
+     * @param clientId ID клиента
+     * @return список записей клиента с флагом justCreated для новых записей
+     */
+    public List<AppointmentDto> getAppointmentsByClientId(Long clientId) {
+        List<Appointment> appointments = appointmentRepository.findByClientId(clientId);
+
+        LocalDateTime fiveMinutesAgo = LocalDateTime.now().minusMinutes(5);
+
+        return appointments.stream()
+                .map(appointment -> {
+                    AppointmentDto dto = appointmentMapper.toDto(appointment);
+                    // Устанавливаем флаг new, если запись создана менее 5 минут назад
+                    dto.setJustCreated(appointment.getCreatedAt().isAfter(fiveMinutesAgo));
+                    return dto;
+                })
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * Вернуть материалы при отмене записи.
+     *
+     * @param appointment запись
+     */
+    public void returnMaterials(Appointment appointment) {
+        log.info("Returning materials for appointment: {}", appointment.getId());
+
+        List<ServiceMaterial> serviceMaterials = serviceMaterialRepository
+                .findByServiceId(appointment.getService().getId());
+
+        for (ServiceMaterial sm : serviceMaterials) {
+            Material material = sm.getMaterial();
+            BigDecimal newQuantity = material.getQuantity().add(sm.getQuantityUsed());
+            material.setQuantity(newQuantity);
+            materialRepository.save(material);
+            log.info("Material returned: {} - {}, new quantity: {}",
+                    material.getName(), sm.getQuantityUsed(), newQuantity);
+        }
+    }
+
+    /**
+     * Найти записи клиента по ID (альтернативный метод).
+     *
+     * @param clientId ID клиента
+     * @return список записей клиента
+     */
     public List<AppointmentDto> findByClientId(Long clientId) {
         log.debug("Finding appointments by client id: {}", clientId);
 
         List<Appointment> appointments = appointmentRepository.findByClientId(clientId);
+
         return appointments.stream()
                 .map(appointmentMapper::toDto)
                 .collect(Collectors.toList());

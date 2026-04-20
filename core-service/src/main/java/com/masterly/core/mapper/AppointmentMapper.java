@@ -2,49 +2,57 @@ package com.masterly.core.mapper;
 
 import com.masterly.core.dto.AppointmentCreateDto;
 import com.masterly.core.dto.AppointmentDto;
-import com.masterly.core.model.Appointment;
-import com.masterly.core.model.AppointmentStatus;
-import com.masterly.core.model.Master;
-import com.masterly.core.model.Client;
-import com.masterly.core.model.ServiceEntity;
-import org.springframework.stereotype.Component;
+import com.masterly.core.entity.Appointment;
+import com.masterly.core.entity.Client;
+import com.masterly.core.entity.Master;
+import com.masterly.core.entity.ServiceEntity;
+import org.mapstruct.Mapper;
+import org.mapstruct.Mapping;
 
-import java.time.LocalTime;
+/**
+ * Маппер для преобразования между сущностью {@link Appointment}
+ * и DTO {@link AppointmentDto} / {@link AppointmentCreateDto}.
+ * Использует MapStruct для автоматической генерации реализации.
+ */
+@Mapper(componentModel = "spring")
+public interface AppointmentMapper {
 
-@Component
-public class AppointmentMapper {
+    /**
+     * Преобразовать сущность {@link Appointment} в {@link AppointmentDto}.
+     *
+     * @param appointment сущность записи
+     * @return DTO с данными записи
+     */
+    @Mapping(target = "masterId", source = "master.id")
+    @Mapping(target = "masterName", source = "master.fullName")
+    @Mapping(target = "clientId", source = "client.id")
+    @Mapping(target = "serviceId", source = "service.id")
+    @Mapping(target = "clientName", source = "client.fullName")
+    @Mapping(target = "serviceName", source = "service.name")
+    @Mapping(target = "durationMinutes", source = "service.durationMinutes")
+    @Mapping(target = "status", expression = "java(appointment.getStatus().name())")
+    @Mapping(target = "justCreated", ignore = true)
+    AppointmentDto toDto(Appointment appointment);
 
-    public AppointmentDto toDto(Appointment appointment) {
-        AppointmentDto dto = new AppointmentDto();
-        dto.setId(appointment.getId());
-        dto.setMasterId(appointment.getMaster().getId());
-        dto.setClientId(appointment.getClient().getId());
-        dto.setClientName(appointment.getClient().getFullName());
-        dto.setServiceId(appointment.getService().getId());
-        dto.setServiceName(appointment.getService().getName());
-        dto.setDurationMinutes(appointment.getService().getDurationMinutes());
-        dto.setAppointmentDate(appointment.getAppointmentDate());
-        dto.setStartTime(appointment.getStartTime());
-        dto.setEndTime(appointment.getEndTime());
-        dto.setStatus(appointment.getStatus().name());
-        dto.setNotes(appointment.getNotes());
-        dto.setCreatedAt(appointment.getCreatedAt());
-        dto.setUpdatedAt(appointment.getUpdatedAt());
-        return dto;
-    }
-
-    public Appointment toEntity(AppointmentCreateDto dto, Master master, Client client, ServiceEntity service) {
-        Appointment appointment = new Appointment();
-        appointment.setMaster(master);
-        appointment.setClient(client);
-        appointment.setService(service);
-        appointment.setAppointmentDate(dto.getAppointmentDate());
-        appointment.setStartTime(dto.getStartTime());
-        // Вычисляем время окончания: startTime + длительность услуги (в минутах)
-        LocalTime endTime = dto.getStartTime().plusMinutes(service.getDurationMinutes());
-        appointment.setEndTime(endTime);
-        appointment.setNotes(dto.getNotes());
-        appointment.setStatus(AppointmentStatus.PENDING);
-        return appointment;
-    }
+    /**
+     * Преобразовать {@link AppointmentCreateDto} в сущность {@link Appointment}.
+     *
+     * @param dto     DTO с данными для создания записи
+     * @param master  мастер
+     * @param client  клиент
+     * @param service услуга
+     * @return сущность записи
+     */
+    @Mapping(target = "id", ignore = true)
+    @Mapping(target = "master", source = "master")
+    @Mapping(target = "client", source = "client")
+    @Mapping(target = "service", source = "service")
+    @Mapping(target = "notes", source = "dto.notes")
+    @Mapping(target = "appointmentDate", source = "dto.appointmentDate")
+    @Mapping(target = "startTime", source = "dto.startTime")
+    @Mapping(target = "endTime", ignore = true)  // ← ИГНОРИРУЕМ, так как его нет в DTO
+    @Mapping(target = "status", constant = "PENDING")
+    @Mapping(target = "createdAt", ignore = true)
+    @Mapping(target = "updatedAt", ignore = true)
+    Appointment toEntity(AppointmentCreateDto dto, Master master, Client client, ServiceEntity service);
 }

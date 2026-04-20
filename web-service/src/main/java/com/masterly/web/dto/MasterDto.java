@@ -1,9 +1,19 @@
 package com.masterly.web.dto;
 
+import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
+
 import java.time.LocalDateTime;
 
+/**
+ * DTO мастера.
+ */
 @Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
 public class MasterDto {
     private Long id;
     private String email;

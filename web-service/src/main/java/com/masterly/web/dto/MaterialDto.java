@@ -1,9 +1,19 @@
 package com.masterly.web.dto;
 
+import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
+
 import java.math.BigDecimal;
 
+/**
+ * DTO материала.
+ */
 @Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
 public class MaterialDto {
     private Long id;
     private String name;
@@ -15,4 +25,5 @@ public class MaterialDto {
     private String supplier;          // поставщик
     private String category;
     private Boolean isActive;
+    private String notes;
 }

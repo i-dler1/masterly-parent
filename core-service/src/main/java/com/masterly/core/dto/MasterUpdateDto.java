@@ -1,9 +1,19 @@
 package com.masterly.core.dto;
 
 import jakarta.validation.constraints.*;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
+/**
+ * DTO для обновления профиля мастера.
+ * Содержит поля, доступные для редактирования.
+ */
 @Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
 public class MasterUpdateDto {
 
     @NotBlank(message = "Имя обязательно")

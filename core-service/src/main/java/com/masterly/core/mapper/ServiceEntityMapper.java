@@ -1,44 +1,33 @@
 package com.masterly.core.mapper;
 
 import com.masterly.core.dto.ServiceEntityDto;
-import com.masterly.core.model.ServiceEntity;
-import com.masterly.core.model.Master;
-import org.slf4j.LoggerFactory;
-import org.springframework.stereotype.Component;
+import com.masterly.core.entity.ServiceEntity;
+import org.mapstruct.*;
 
-import org.slf4j.Logger;
+import java.util.List;
 
-@Component
-public class ServiceEntityMapper {
+/**
+ * Маппер для преобразования между сущностью {@link ServiceEntity} и DTO {@link ServiceEntityDto}.
+ * Использует MapStruct для автоматической генерации реализации.
+ */
+@Mapper(componentModel = "spring", unmappedTargetPolicy = ReportingPolicy.IGNORE)
+public interface ServiceEntityMapper {
 
-    private static final Logger log = LoggerFactory.getLogger(ServiceEntityMapper.class);
+    /**
+     * Преобразовать сущность в DTO.
+     *
+     * @param serviceEntity сущность услуги
+     * @return DTO с данными услуги
+     */
+    ServiceEntityDto toDto(ServiceEntity serviceEntity);
 
-    public ServiceEntityDto toDto(ServiceEntity service) {
-        ServiceEntityDto dto = new ServiceEntityDto();
-        dto.setId(service.getId());
-        dto.setMasterId(service.getMaster().getId());
-        dto.setName(service.getName());
-        dto.setDescription(service.getDescription());
-        dto.setDurationMinutes(service.getDurationMinutes());
-        dto.setPrice(service.getPrice());
-        dto.setCategory(service.getCategory());
-        dto.setIsActive(service.getIsActive());
-        dto.setCreatedAt(service.getCreatedAt());
-        return dto;
-    }
+    /**
+     * Преобразовать DTO в сущность.
+     *
+     * @param requestDto DTO с данными услуги
+     * @return сущность услуги
+     */
+    ServiceEntity toEntity(ServiceEntityDto requestDto);
 
-    public ServiceEntity toEntity(ServiceEntityDto dto, Master master) {
-        log.debug("toEntity: dto={}", dto);
-        log.debug("toEntity: master={}", master);
-        ServiceEntity service = new ServiceEntity();
-        service.setId(dto.getId());
-        service.setMaster(master);
-        service.setName(dto.getName());
-        service.setDescription(dto.getDescription());
-        service.setDurationMinutes(dto.getDurationMinutes());
-        service.setPrice(dto.getPrice());
-        service.setCategory(dto.getCategory());
-        service.setIsActive(dto.getIsActive() != null ? dto.getIsActive() : true);
-        return service;
-    }
+    List<ServiceEntityDto> toDtoList(List<ServiceEntity> services);
 }

@@ -1,6 +1,6 @@
 package com.masterly.core.security;
 
-import com.masterly.core.model.Master;
+import com.masterly.core.entity.Master;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
@@ -16,6 +16,10 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.function.Function;
 
+/**
+ * Утилитный класс для работы с JWT токенами.
+ * Предоставляет методы для генерации, валидации и извлечения данных из токенов.
+ */
 @Slf4j
 @Component
 public class JwtUtil {
@@ -30,16 +34,36 @@ public class JwtUtil {
         return Keys.hmacShaKeyFor(secret.getBytes());
     }
 
+    /**
+     * Извлечь имя пользователя (email) из токена.
+     *
+     * @param token JWT токен
+     * @return email пользователя
+     */
     public String extractUsername(String token) {
         log.debug("Extracting username from token");
         return extractClaim(token, Claims::getSubject);
     }
 
+    /**
+     * Извлечь дату истечения срока действия токена.
+     *
+     * @param token JWT токен
+     * @return дата истечения
+     */
     public Date extractExpiration(String token) {
         log.debug("Extracting expiration from token");
         return extractClaim(token, Claims::getExpiration);
     }
 
+    /**
+     * Извлечь произвольный claim из токена.
+     *
+     * @param token          JWT токен
+     * @param claimsResolver функция для извлечения нужного claim
+     * @param <T>            тип возвращаемого значения
+     * @return значение claim
+     */
     public <T> T extractClaim(String token, Function<Claims, T> claimsResolver) {
         final Claims claims = extractAllClaims(token);
         return claimsResolver.apply(claims);
@@ -59,6 +83,12 @@ public class JwtUtil {
         return expired;
     }
 
+    /**
+     * Сгенерировать JWT токен для пользователя.
+     *
+     * @param userDetails данные пользователя
+     * @return JWT токен
+     */
     public String generateToken(UserDetails userDetails) {
         log.debug("Generating token for user: {}", userDetails.getUsername());
 
@@ -90,6 +120,13 @@ public class JwtUtil {
                 .compact();
     }
 
+    /**
+     * Проверить валидность токена.
+     *
+     * @param token       JWT токен
+     * @param userDetails данные пользователя для сверки
+     * @return true если токен валиден и не истёк
+     */
     public Boolean validateToken(String token, UserDetails userDetails) {
         final String username = extractUsername(token);
         boolean isValid = username.equals(userDetails.getUsername()) && !isTokenExpired(token);

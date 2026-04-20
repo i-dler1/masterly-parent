@@ -2,6 +2,9 @@ package com.masterly.web.dto;
 
 import lombok.Data;
 
+/**
+ * Ответ аутентификации.
+ */
 @Data
 public class AuthResponse {
     private String token;

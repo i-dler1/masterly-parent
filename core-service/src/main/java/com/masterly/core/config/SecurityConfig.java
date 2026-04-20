@@ -13,11 +13,22 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
-import org.springframework.security.crypto.password.NoOpPasswordEncoder;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
+/**
+ * Конфигурация Spring Security для приложения.
+ * <p>
+ * Настраивает:
+ * <ul>
+ *   <li>Stateless сессии (JWT аутентификация)</li>
+ *   <li>Публичные и защищённые эндпоинты</li>
+ *   <li>BCrypt кодирование паролей</li>
+ *   <li>JWT фильтр перед UsernamePasswordAuthenticationFilter</li>
+ * </ul>
+ */
 @Slf4j
 @Configuration
 @EnableWebSecurity
@@ -27,44 +38,34 @@ public class SecurityConfig {
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final MasterDetailsService masterDetailsService;
 
+    /**
+     * Настройка цепочки фильтров безопасности.
+     *
+     * @param http HttpSecurity для конфигурации
+     * @return настроенная цепочка фильтров
+     * @throws Exception при ошибке конфигурации
+     */
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         log.debug("Configuring security filters");
 
         http
                 .csrf(AbstractHttpConfigurer::disable)
-                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .sessionManagement(session ->
+                        session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
+                        // Публичные эндпоинты
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers("/api/masters").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/clients").permitAll()
-                        .requestMatchers(HttpMethod.POST,"/api/clients").permitAll()
-                        .requestMatchers(HttpMethod.DELETE, "/api/clients/*").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/clients/{id}").permitAll()
-                        .requestMatchers(HttpMethod.PUT, "/api/clients/*").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/services").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/services").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/services/*").permitAll()
-                        .requestMatchers(HttpMethod.PUT, "/api/services/*").permitAll()
-                        .requestMatchers(HttpMethod.DELETE, "/api/services/*").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/materials").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/materials/*").permitAll()
-                        .requestMatchers(HttpMethod.PUT, "/api/materials/*").permitAll()
-                        .requestMatchers(HttpMethod.DELETE, "/api/materials/*").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/appointments").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/appointments/*").permitAll()
-                        .requestMatchers(HttpMethod.PATCH, "/api/appointments/*/status").permitAll()
-                        .requestMatchers(HttpMethod.DELETE, "/api/appointments/*").permitAll()
-                        .requestMatchers(HttpMethod.PUT, "/api/appointments/*").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/appointments/*/status").permitAll()
-                        .requestMatchers("/api/services/paginated").permitAll()
-                        .requestMatchers("/api/materials/paginated").permitAll()
-                        .requestMatchers("/api/clients/paginated").permitAll()
-                        .requestMatchers("/api/appointments/paginated").permitAll()
-                        .requestMatchers("/api/appointments/calendar").permitAll()
+                        .requestMatchers("/api/masters/by-email").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/masters/*").permitAll()
                         .requestMatchers("/actuator/health").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/masters/profile/*").permitAll()
-                        .requestMatchers(HttpMethod.PUT, "/api/masters/profile/*").permitAll()
+                        .requestMatchers(HttpMethod.PUT, "/api/clients/*").authenticated()
+
+                        // Admin эндпоинты (только для ADMIN)
+                        .requestMatchers("/api/admin/**").hasRole("ADMIN")
+
+                        // Все остальные эндпоинты требуют аутентификации
                         .anyRequest().authenticated()
                 )
                 .userDetailsService(masterDetailsService)
@@ -74,13 +75,24 @@ public class SecurityConfig {
         return http.build();
     }
 
+    /**
+     * Кодировщик паролей BCrypt.
+     *
+     * @return PasswordEncoder
+     */
     @Bean
-    @SuppressWarnings("deprecation")
     public PasswordEncoder passwordEncoder() {
-        log.debug("Using NoOpPasswordEncoder for development (passwords stored in plain text)");
-        return NoOpPasswordEncoder.getInstance();
+        log.debug("Using BCryptPasswordEncoder for production");
+        return new BCryptPasswordEncoder();
     }
 
+    /**
+     * Менеджер аутентификации.
+     *
+     * @param config конфигурация аутентификации
+     * @return AuthenticationManager
+     * @throws Exception при ошибке создания
+     */
     @Bean
     public AuthenticationManager authenticationManager(AuthenticationConfiguration config) throws Exception {
         log.debug("Configuring AuthenticationManager");

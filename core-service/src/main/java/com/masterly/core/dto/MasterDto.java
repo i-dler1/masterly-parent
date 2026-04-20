@@ -1,15 +1,29 @@
 package com.masterly.core.dto;
 
-import com.masterly.core.model.Role;
+import com.masterly.core.validation.PhoneNumber;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
+
 import java.time.LocalDateTime;
 
+/**
+ * DTO для передачи данных о мастере.
+ * Используется в REST API для отображения информации о мастере.
+ */
 @Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
 public class MasterDto {
     private Long id;
     private String email;
     private String fullName;
+
+    @PhoneNumber
     private String phone;
+
     private String businessName;
     private String specialization;
     private String avatarUrl;

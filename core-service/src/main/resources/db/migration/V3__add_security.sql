@@ -1,11 +1,9 @@
--- Добавляем поле role
-ALTER TABLE masters
-    ADD COLUMN IF NOT EXISTS role VARCHAR(50) NOT NULL DEFAULT 'MASTER';
+-- Добавляем роль в masters (если ещё нет)
+ALTER TABLE masters ADD COLUMN IF NOT EXISTS role VARCHAR(20) DEFAULT 'MASTER';
 
--- Обновляем password_hash для test@masterly.com (пароль: 123 в открытом виде)
-UPDATE masters
-SET password_hash = '123'
-WHERE email = 'test@masterly.com';
+-- Добавляем роль в clients
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS role VARCHAR(20) DEFAULT 'CLIENT';
 
--- Создаем индекс для быстрого поиска по email
+-- Индекс для быстрого поиска по email
 CREATE INDEX IF NOT EXISTS idx_masters_email ON masters(email);
+CREATE INDEX IF NOT EXISTS idx_clients_email ON clients(email);
