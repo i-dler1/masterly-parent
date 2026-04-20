@@ -4,22 +4,13 @@ import lombok.extern.slf4j.Slf4j;
 import org.flywaydb.core.Flyway;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.Profile;
-import org.springframework.context.event.ContextRefreshedEvent;
-import org.springframework.context.event.EventListener;
+import jakarta.annotation.PostConstruct;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.Statement;
 
-/**
- * Конфигурация для автоматического создания базы данных и выполнения миграций Flyway.
- * <p>
- * Используется ручное управление Flyway вместо spring.flyway.*
- * Причина: необходимо сначала создать БД через админское подключение к postgres,
- * затем выполнить миграции. Стандартный Flyway не умеет создавать БД.
- * <p>
- * <b>Не выполняется в тестовом профиле (@Profile("!test")).</b>
- */
 @Slf4j
 @Configuration
-@Profile("!test")
 public class DatabaseMigrationConfig {
 
     @Value("${spring.datasource.url}")
@@ -40,31 +31,99 @@ public class DatabaseMigrationConfig {
     @Value("${database.admin.password:postgres}")
     private String adminPassword;
 
-
-    /**
-     * Инициализация базы данных при старте контекста.
-     * <p>
-     * Этап 1: создание БД через админское подключение (выполняется только V1).<br>
-     * Этап 2: выполнение всех миграций через рабочее подключение.
-     */
-    @EventListener(ContextRefreshedEvent.class)
+    @PostConstruct
     public void initDatabase() {
-        log.info("Creating database...");
-        Flyway.configure()
-                .dataSource(adminUrl, adminUser, adminPassword)
-                .locations("classpath:db/production-migration", "classpath:db/migration")
-                .target("1")
-                .load()
-                .migrate();
+        log.info("=== Starting automatic database initialization ===");
 
-        log.info("Applying migrations...");
-        Flyway.configure()
+        // 1. Создаём БД и пользователя
+        createDatabaseAndUser();
+
+        // 2. Ждём 2 секунды для применения прав
+        try { Thread.sleep(2000); } catch (InterruptedException e) {}
+
+        // 3. Запускаем Flyway миграции
+        log.info("Running Flyway migrations...");
+        Flyway flyway = Flyway.configure()
                 .dataSource(appUrl, appUser, appPassword)
                 .locations("classpath:db/migration")
                 .baselineOnMigrate(true)
-                .load()
-                .migrate();
+                .load();
 
-        log.info("Database ready!");
+        flyway.migrate();
+        log.info("=== Database initialization completed! ===");
+    }
+
+    private void createDatabaseAndUser() {
+        String dbName = extractDatabaseName(appUrl);
+
+        try (Connection conn = DriverManager.getConnection(adminUrl, adminUser, adminPassword);
+             Statement stmt = conn.createStatement()) {
+
+            conn.setAutoCommit(true);
+
+            // Создаём пользователя
+            try {
+                stmt.execute(String.format("CREATE USER %s WITH PASSWORD '%s'", appUser, appPassword));
+                log.info("✅ User '{}' created", appUser);
+            } catch (Exception e) {
+                if (e.getMessage().contains("already exists")) {
+                    log.info("ℹ️ User '{}' already exists", appUser);
+                } else {
+                    log.warn("User creation: {}", e.getMessage());
+                }
+            }
+
+            // Создаём базу данных
+            try {
+                stmt.execute(String.format("CREATE DATABASE %s", dbName));
+                log.info("✅ Database '{}' created", dbName);
+            } catch (Exception e) {
+                if (e.getMessage().contains("already exists")) {
+                    log.info("ℹ️ Database '{}' already exists", dbName);
+                } else {
+                    log.warn("Database creation: {}", e.getMessage());
+                }
+            }
+
+            // Даём права на БД
+            try {
+                stmt.execute(String.format("GRANT ALL PRIVILEGES ON DATABASE %s TO %s", dbName, appUser));
+                log.info("✅ Privileges granted on database");
+            } catch (Exception e) {
+                log.warn("Grant privileges: {}", e.getMessage());
+            }
+
+        } catch (Exception e) {
+            log.error("Failed to create database/user: {}", e.getMessage());
+        }
+
+        // Отдельное подключение для прав на схему
+        grantSchemaPrivileges(dbName);
+    }
+
+    private void grantSchemaPrivileges(String dbName) {
+        String url = String.format("jdbc:postgresql://localhost:5432/%s", dbName);
+
+        try (Connection conn = DriverManager.getConnection(url, adminUser, adminPassword);
+             Statement stmt = conn.createStatement()) {
+
+            // Даём права на схему public
+            stmt.execute(String.format("GRANT ALL ON SCHEMA public TO %s", appUser));
+            stmt.execute(String.format("ALTER SCHEMA public OWNER TO %s", appUser));
+            log.info("✅ Schema privileges granted");
+
+        } catch (Exception e) {
+            log.warn("Failed to grant schema privileges: {}", e.getMessage());
+        }
+    }
+
+    private String extractDatabaseName(String url) {
+        int lastSlash = url.lastIndexOf('/');
+        String dbName = url.substring(lastSlash + 1);
+        int questionMark = dbName.indexOf('?');
+        if (questionMark != -1) {
+            dbName = dbName.substring(0, questionMark);
+        }
+        return dbName;
     }
 }

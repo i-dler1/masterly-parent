@@ -6,19 +6,29 @@ spring:
     url: jdbc:postgresql://localhost:5432/masterly_db
     username: masterly_user
     password: masterly_password
-
+    hikari:
+      initialization-fail-timeout: 0
+  jpa:
+    hibernate:
+      ddl-auto: none
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
   flyway:
     enabled: true
-    locations:
-      - classpath:db/production-migration
-      - classpath:db/migration
-
-database:
-  admin:
-    url: jdbc:postgresql://localhost:5432/postgres
-    username: postgres
-    password: postgres
+    baseline-on-migrate: true
+    locations: classpath:db/migration
+    validate-on-migrate: false
 
 jwt:
   secret: your-secret-key-for-jwt-token-change-in-production
   expiration: 86400000
+
+# Настройки для создания БД
+database:
+  init:
+    host: localhost
+    port: 5432
+    admin-user: postgres
+    admin-password: postgres
+    db-name: masterly_db
+    db-user: masterly_user
+    db-password: masterly_password
